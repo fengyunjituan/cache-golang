@@ -23,7 +23,7 @@ type XEntry struct {
  The private interface
  */
 type expiringCacheEntry interface {
-	XCache(key string, expire time.Duration, value expiringCacheEntry,aboutToExpireFunc func(string))
+	XCache(key string, expire time.Duration, value expiringCacheEntry, aboutToExpireFunc func(string))
 	KeepAlive()
 	ExpiringSince() time.Time
 	ExpireDuration() time.Duration
@@ -31,47 +31,46 @@ type expiringCacheEntry interface {
 }
 
 var (
-	xcache              = make(map[string]expiringCacheEntry)
-	cache               = make(map[string]interface{})
-	xMux                sync.RWMutex
-	mux                 sync.RWMutex
-	expTimer            *time.Timer
-	ExpireCheckInterval = 30 * time.Second
+	xcache      = make(map[string]expiringCacheEntry)
+	cache       = make(map[string]interface{})
+	xMux        sync.RWMutex
+	mux         sync.RWMutex
+	expTimer    *time.Timer
+	expDuration = 0 * time.Second
 )
-
-/**
-  init
- */
-func init() {
-	expirationCheck()
-}
 
 /**
    check
  */
 func expirationCheck() {
-	go removeExpiredEntries()
-}
-
-/**
-  remove
- */
-func removeExpiredEntries() {
+	if expTimer != nil {
+		expTimer.Stop()
+	}
 	//Take a copy of xcache so we can iterate over it without blocking the mutex
 	xMux.Lock()
 	cache := xcache
 	xMux.Unlock()
 
 	now := time.Now()
+	smallestDuration := 0 * time.Second
 	for key, c := range cache {
 		if now.Sub(c.ExpiringSince()) >= c.ExpireDuration() {
 			xMux.Lock()
 			c.AboutToExpire()
 			delete(xcache, key)
 			xMux.Unlock()
+		} else {
+			if smallestDuration == 0 || c.ExpireDuration() < smallestDuration {
+				smallestDuration = c.ExpireDuration() - now.Sub(c.ExpiringSince())
+			}
 		}
 	}
-	expTimer = time.AfterFunc(ExpireCheckInterval, expirationCheck)
+	expDuration = smallestDuration
+	if smallestDuration > 0 {
+		expTimer = time.AfterFunc(expDuration, func() {
+			go expirationCheck()
+		})
+	}
 }
 
 /**
@@ -85,8 +84,12 @@ func (xe *XEntry) XCache(key string, expire time.Duration, value expiringCacheEn
 	xe.aboutToExpire = aboutToExpireFunc
 
 	xMux.Lock()
-	defer xMux.Unlock()
 	xcache[key] = value
+	xMux.Unlock()
+
+	if expDuration == 0 || expire < expDuration {
+		expirationCheck()
+	}
 }
 
 /**
@@ -177,4 +180,8 @@ func XFulsh() {
 	xMux.Lock()
 	defer xMux.Unlock()
 	xcache = make(map[string]expiringCacheEntry)
+	expDuration = 0
+	if expTimer != nil {
+		expTimer.Stop()
+	}
 }
