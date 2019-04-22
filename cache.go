@@ -74,7 +74,10 @@ func expirationCheck() {
 }
 
 /**
-  The main function to cache with expiration
+   Adds an expiring key/value pair to the cache
+   The last parameter abouToExpireFunc can be nil. Otherwise abouToExpireFunc
+   will be called (with this item's key as its only parameter), right before
+   removing this item from the cache.
  */
 func (xe *XEntry) XCache(key string, expire time.Duration, value ExpiringCacheEntry, aboutToExpireFunc func(string)) {
 	xe.keepAlive = true
@@ -149,7 +152,7 @@ func GetXCached(key string) (ece ExpiringCacheEntry, err error) {
 		r.KeepAlive() //Start calling connection
 		return r, nil
 	}
-	return nil, errors.New("not found")
+	return nil, errors.New("key not found in cache")
 }
 
 /**
@@ -161,7 +164,27 @@ func GetCached(key string) (v interface{}, err error) {
 	if r, ok := cache[key]; ok {
 		return r, nil
 	}
-	return nil, errors.New("not found")
+	return nil, errors.New("key not found in cache")
+}
+
+/**
+  Returns how many items are currently stored in the expiration cache
+ */
+func XCacheCount() int {
+	xMux.Lock()
+	defer xMux.Unlock()
+
+	return len(xcache)
+}
+
+/**
+  Returns how many items are currently stored in the non-expiring cache
+  */
+func CacheCount() int {
+	mux.Lock()
+	defer mux.Unlock()
+
+	return len(cache)
 }
 
 /**
