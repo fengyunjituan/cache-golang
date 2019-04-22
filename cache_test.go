@@ -10,9 +10,6 @@ type myCache struct {
 	data string
 }
 
-func init() {
-	ExpireCheckInterval = 1 * time.Second
-}
 func TestCache(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
 	a.XCache("feng", 1*time.Second, a, nil)
@@ -45,11 +42,11 @@ func TestCacheKeepAlive(t *testing.T) {
 	}
 	time.Sleep(500 * time.Millisecond)
 	b.KeepAlive()
-	time.Sleep(2001 * time.Millisecond)
+	time.Sleep(1001 * time.Millisecond)
 	if err != nil {
 		t.Error("Error keeping cache data alive", err)
 	}
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(2001 * time.Millisecond)
 	b, err = GetXCached("feng")
 	if err == nil || b != nil {
 		t.Error("Error expiring data")
@@ -59,7 +56,6 @@ func TestCacheKeepAlive(t *testing.T) {
 func TestFlush(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
 	a.XCache("feng", 10*time.Second, a, nil)
-	time.Sleep(1000 * time.Millisecond)
 	XFulsh()
 	b, err := GetXCached("feng")
 	if err == nil || b != nil {
