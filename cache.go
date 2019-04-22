@@ -20,18 +20,18 @@ type XEntry struct {
 }
 
 /**
- The private interface
+ Interface for accessing expiring cache entries
  */
-type expiringCacheEntry interface {
-	XCache(key string, expire time.Duration, value expiringCacheEntry, aboutToExpireFunc func(string))
+type ExpiringCacheEntry interface {
+	XCache(key string, expire time.Duration, value ExpiringCacheEntry, aboutToExpireFunc func(string))
 	KeepAlive()
 	ExpiringSince() time.Time
 	ExpireDuration() time.Duration
-	AboutToExpire()
+	AboutToExpire() // Callback method triggered right before removing the item from the cache
 }
 
 var (
-	xcache      = make(map[string]expiringCacheEntry)
+	xcache      = make(map[string]ExpiringCacheEntry)
 	cache       = make(map[string]interface{})
 	xMux        sync.RWMutex
 	mux         sync.RWMutex
@@ -40,7 +40,7 @@ var (
 )
 
 /**
-   check
+   Expiration check loop, triggered by a self-adjusting timer
  */
 func expirationCheck() {
 	if expTimer != nil {
@@ -50,7 +50,7 @@ func expirationCheck() {
 	xMux.Lock()
 	cache := xcache
 	xMux.Unlock()
-
+	//loop iteration. Not sure it's really efficient though.
 	now := time.Now()
 	smallestDuration := 0 * time.Second
 	for key, c := range cache {
@@ -76,7 +76,7 @@ func expirationCheck() {
 /**
   The main function to cache with expiration
  */
-func (xe *XEntry) XCache(key string, expire time.Duration, value expiringCacheEntry, aboutToExpireFunc func(string)) {
+func (xe *XEntry) XCache(key string, expire time.Duration, value ExpiringCacheEntry, aboutToExpireFunc func(string)) {
 	xe.keepAlive = true
 	xe.key = key
 	xe.expireDuration = expire
@@ -86,7 +86,7 @@ func (xe *XEntry) XCache(key string, expire time.Duration, value expiringCacheEn
 	xMux.Lock()
 	xcache[key] = value
 	xMux.Unlock()
-
+	// If we haven't set up any expiration check timer or found a more imminent item
 	if expDuration == 0 || expire < expDuration {
 		expirationCheck()
 	}
@@ -120,7 +120,7 @@ func (xe *XEntry) ExpiringSince() time.Time {
 }
 
 /**
-  Returns since when this entry is expiring
+  Triggers an optional callback right before an item gets deleted
  */
 func (xe *XEntry) AboutToExpire() {
 	if xe.aboutToExpire != nil {
@@ -131,7 +131,7 @@ func (xe *XEntry) AboutToExpire() {
 }
 
 /**
-   The function to be used to cache a key/value pair when expiration is not needed
+   Adds a non-expiring key/value pair to the cache
  */
 func Cache(key string, value interface{}) {
 	mux.Lock()
@@ -142,7 +142,7 @@ func Cache(key string, value interface{}) {
 /**
   Get an entry from the expiration cache and mark it to be kept alive
  */
-func GetXCached(key string) (ece expiringCacheEntry, err error) {
+func GetXCached(key string) (ece ExpiringCacheEntry, err error) {
 	xMux.RLock()
 	defer xMux.RUnlock()
 	if r, ok := xcache[key]; ok {
@@ -153,7 +153,7 @@ func GetXCached(key string) (ece expiringCacheEntry, err error) {
 }
 
 /**
-   The function to extract a value for a key that never expires
+    Extracts a value for a given non-expiring key
  */
 func GetCached(key string) (v interface{}, err error) {
 	mux.RLock()
@@ -165,7 +165,7 @@ func GetCached(key string) (v interface{}, err error) {
 }
 
 /**
-  Delete all keys from expiration cache
+  Delete all keys from non-expiring cache
  */
 func Flush() {
 	mux.Lock()
@@ -179,7 +179,7 @@ func Flush() {
 func XFulsh() {
 	xMux.Lock()
 	defer xMux.Unlock()
-	xcache = make(map[string]expiringCacheEntry)
+	xcache = make(map[string]ExpiringCacheEntry)
 	expDuration = 0
 	if expTimer != nil {
 		expTimer.Stop()
