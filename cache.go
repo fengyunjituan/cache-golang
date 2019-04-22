@@ -16,16 +16,18 @@ type XEntry struct {
 	keepAlive      bool          //是否保持连接
 	expireDuration time.Duration //到期时间
 	expiringSince  time.Time     //时间
+	aboutToExpire  func(string)  //回调函数
 }
 
 /**
  The private interface
  */
 type expiringCacheEntry interface {
-	XCache(key string, expire time.Duration, value expiringCacheEntry)
+	XCache(key string, expire time.Duration, value expiringCacheEntry,aboutToExpireFunc func(string))
 	KeepAlive()
 	ExpiringSince() time.Time
 	ExpireDuration() time.Duration
+	AboutToExpire()
 }
 
 var (
@@ -40,7 +42,7 @@ var (
 /**
   init
  */
-func Init() {
+func init() {
 	expirationCheck()
 }
 
@@ -64,6 +66,7 @@ func removeExpiredEntries() {
 	for key, c := range cache {
 		if now.Sub(c.ExpiringSince()) >= c.ExpireDuration() {
 			xMux.Lock()
+			c.AboutToExpire()
 			delete(xcache, key)
 			xMux.Unlock()
 		}
@@ -74,11 +77,12 @@ func removeExpiredEntries() {
 /**
   The main function to cache with expiration
  */
-func (xe *XEntry) XCache(key string, expire time.Duration, value expiringCacheEntry) {
+func (xe *XEntry) XCache(key string, expire time.Duration, value expiringCacheEntry, aboutToExpireFunc func(string)) {
 	xe.keepAlive = true
 	xe.key = key
 	xe.expireDuration = expire
 	xe.expiringSince = time.Now()
+	xe.aboutToExpire = aboutToExpireFunc
 
 	xMux.Lock()
 	defer xMux.Unlock()
@@ -110,6 +114,17 @@ func (xe *XEntry) ExpiringSince() time.Time {
 	xe.Lock()
 	defer xe.Unlock()
 	return xe.expiringSince
+}
+
+/**
+  Returns since when this entry is expiring
+ */
+func (xe *XEntry) AboutToExpire() {
+	if xe.aboutToExpire != nil {
+		xe.Lock()
+		defer xe.Unlock()
+		xe.aboutToExpire(xe.key)
+	}
 }
 
 /**

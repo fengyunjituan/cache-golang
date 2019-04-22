@@ -10,12 +10,12 @@ type myCache struct {
 	data string
 }
 
-func init(){
-	ExpireCheckInterval = 1*time.Second
+func init() {
+	ExpireCheckInterval = 1 * time.Second
 }
 func TestCache(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
-	a.XCache("feng", 1*time.Second, a)
+	a.XCache("feng", 1*time.Second, a, nil)
 	b, err := GetXCached("feng")
 	if err != nil || b == nil || b != a {
 		t.Error("Error retriving data from cache", err)
@@ -24,7 +24,7 @@ func TestCache(t *testing.T) {
 
 func TestCacheExpire(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
-	a.XCache("feng", 1*time.Second, a)
+	a.XCache("feng", 1*time.Second, a, nil)
 	b, err := GetXCached("feng")
 	if err != nil || b == nil || b.(*myCache).data != "feng qi yun yong" {
 		t.Error("Error retriving data from cache", err)
@@ -38,7 +38,7 @@ func TestCacheExpire(t *testing.T) {
 
 func TestCacheKeepAlive(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
-	a.XCache("feng", 1*time.Second, a)
+	a.XCache("feng", 1*time.Second, a, nil)
 	b, err := GetXCached("feng")
 	if err != nil || b == nil || b.(*myCache).data != "feng qi yun yong" {
 		t.Error("Error retriving data from cache", err)
@@ -58,7 +58,7 @@ func TestCacheKeepAlive(t *testing.T) {
 
 func TestFlush(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
-	a.XCache("feng", 10*time.Second, a)
+	a.XCache("feng", 10*time.Second, a, nil)
 	time.Sleep(1000 * time.Millisecond)
 	XFulsh()
 	b, err := GetXCached("feng")
@@ -69,7 +69,7 @@ func TestFlush(t *testing.T) {
 
 func TestFlushNoTimeout(t *testing.T) {
 	a := &myCache{data: "feng qi yun yong"}
-	a.XCache("feng", 10*time.Second, a)
+	a.XCache("feng", 10*time.Second, a, nil)
 	XFulsh()
 	b, err := GetXCached("feng")
 	if err == nil || b != nil {
